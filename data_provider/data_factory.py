@@ -20,21 +20,11 @@ def data_provider(args, data_path, flag):
         time_enc=time_enc,
         freq=freq,
     )
-    split_point = int(len(data_set) * 0.8)
-    train_data = Subset(data_set, range(split_point))
-    val_data = Subset(data_set, range(split_point, len(data_set)))
-    train_loader = DataLoader(
-        train_data,
+    data_loader = DataLoader(
+        data_set,
         batch_size=batch_size,
         shuffle=shuffle_flag,
         num_workers=args.num_workers,
         drop_last=drop_last
     )
-    val_loader = DataLoader(
-        val_data,
-        batch_size=batch_size,
-        shuffle=shuffle_flag,
-        num_workers=args.num_workers,
-        drop_last=drop_last
-    )
-    return train_data, train_loader, val_data, val_loader
+    return data_set, data_loader

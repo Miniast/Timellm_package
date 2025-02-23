@@ -85,29 +85,37 @@ def read_excel(excel_file):
 
 
 def create_dataset(dfs, mode):
-    data = []
+    train_data = []
+    val_data = []
+    test_data = []
     pos_base = 0
     for df in dfs:
         device = f'{df["device"].values[0]}-{df["name"].values[0]}'
         if mode == 'train':
-            # 在train mode下，每隔48行做pos记录，直到pos+96+48越界, 形成一个seq_begins数组[0, 24, 48, ...]
-            seqs = [(device, pos + pos_base) for pos in range(0, len(df), 48) if pos + 96 + 48 <= len(df)]
-            data.extend(seqs)
+            # 在train mode下，每隔48行做pos记录，直到pos+96+96越界, 形成一个seq_begins数组[0, 24, 48, ...]
+            seqs = [(device, pos + pos_base) for pos in range(0, len(df), 48) if pos + 192 <= len(df)]
+            # 将seqs分成train_data和val_data
+            train_data.extend(seqs[:int(len(seqs) * 0.8)])
+            val_data.extend(seqs[int(len(seqs) * 0.8):])
         elif mode == 'test':
             # 在test mode下，每个df只取一个最后seq
-            df = df.iloc[-96 - 48:]
-            data.append((device, pos_base))
-
+            df = df.iloc[-192:]
+            test_data.append((device, pos_base))
         pos_base += len(df)
 
-    data_df = pd.DataFrame(data)
-    data_df.to_csv('./dataset/data_index.csv', index=False, header=False)
-
+    if mode == 'train':
+        train_data_df = pd.DataFrame(train_data)
+        train_data_df.to_csv('./dataset/train_data_index.csv', index=False, header=False)
+        val_data_df = pd.DataFrame(val_data)
+        val_data_df.to_csv('./dataset/val_data_index.csv', index=False, header=False)
+    elif mode == 'test':
+        test_data_df = pd.DataFrame(test_data)
+        test_data_df.to_csv('./dataset/test_data_index.csv', index=False, header=False)
 
 def main():
-    dfs = read_excel(args.excel_file)
-    # dfs = pd.read_csv('./dataset/total.csv')
-    # dfs = [group.copy() for _, group in dfs.groupby('device')]
+    # dfs = read_excel(args.excel_file)
+    dfs = pd.read_csv('./dataset/total.csv')
+    dfs = [group.copy() for _, group in dfs.groupby('device')]
     create_dataset(dfs, args.mode)
 
 

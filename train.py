@@ -167,7 +167,8 @@ def validate(args, accelerator, model, val_data, val_loader, loss_func, mae_loss
 
 def main():
     setting = "Capacity_Timellm"
-    train_data, train_loader, val_data, val_loader = data_provider(args, 'total.csv', 'train')
+    train_data, train_loader = data_provider(args, 'total.csv', 'train')
+    val_data, val_loader = data_provider(args, 'total.csv', 'val')
 
     args.content = load_prompt('./dataset/Capacity.txt')
     model = TimeLLM.Model(args).float()
@@ -218,7 +219,7 @@ def main():
         ):
             iter_count += 1
             model_optim.zero_grad()
-            # seq is (B, 96, 3), tar is (B, 144, 3), seq_timestamp is (B, 96, 5), tar_timestamp is (B, 144, 5)
+            # seq is (B, 96, 2), tar is (B, 144, 2), seq_timestamp is (B, 96, 5), tar_timestamp is (B, 144, 5)
             seq = seq.float().to(accelerator.device)
             tar = tar.float().to(accelerator.device)
             seq_timestamp = seq_timestamp.float().to(accelerator.device)

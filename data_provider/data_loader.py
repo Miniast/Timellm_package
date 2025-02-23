@@ -49,7 +49,7 @@ class DatasetCapacity(Dataset):
         # df_raw drop date column
         self.data = df_raw.drop(labels=['date','device','name'], axis=1)
         self.data_stamp = data_stamp
-        index_df = pd.read_csv(os.path.join(self.root_path, 'data_index.csv'))
+        index_df = pd.read_csv(os.path.join(self.root_path, f'{self.flag}_data_index.csv'))
         self.data_list = index_df.values
 
     def __getitem__(self, index):
