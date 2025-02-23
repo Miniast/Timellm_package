@@ -1,3 +1,5 @@
-checkpoints
 .idea
 **/__pycache__/
+duplicated
+checkpoints/Capacity_Timellm/checkpoint
+*.log

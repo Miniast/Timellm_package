@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from models import TimeLLM
 from data_provider.data_factory import data_provider
-import time
 import random
 import numpy as np
 import os
@@ -17,9 +16,9 @@ import json
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
-parser = argparse.ArgumentParser(description='Test Only')
+parser = argparse.ArgumentParser(description='Predict')
 
-fix_seed = 2021
+fix_seed = 2025
 random.seed(fix_seed)
 torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
@@ -27,8 +26,8 @@ np.random.seed(fix_seed)
 # basic config
 parser.add_argument('--task_name', type=str, default='long_term_forecast',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
-parser.add_argument('--root_path', type=str, default='./dataset/Capacity', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='Train.csv', help='data file')
+parser.add_argument('--root_path', type=str, default='./dataset', help='root path of the data file')
+parser.add_argument('--data_path', type=str, default='total.csv', help='data file')
 parser.add_argument('--features', type=str, default='M',
                     help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, '
@@ -45,7 +44,7 @@ parser.add_argument('--label_len', type=int, default=48, help='start token lengt
 parser.add_argument('--pred_len', type=int, default=96, help='prediction sequence length')
 
 # model define
-parser.add_argument('--enc_in', type=int, default=7, help='encoder input size')
+parser.add_argument('--enc_in', type=int, default=2, help='encoder input size')
 parser.add_argument('--dec_in', type=int, default=7, help='decoder input size')
 parser.add_argument('--c_out', type=int, default=7, help='output size')
 parser.add_argument('--d_model', type=int, default=32, help='dimension of model')
@@ -101,21 +100,16 @@ def load_prompt(prompt_path):
     return content
 
 
-def test(args, accelerator, model, test_data, test_loader, loss_func, mae_loss_func, mse_loss_func):
-    total_loss = []
-    total_mae_loss = []
-    total_mse_loss = []
+def test(args, accelerator, model, test_data, test_loader):
     test_result = []
 
     model.eval()
     with torch.no_grad():
-        for i, (seq, tar, seq_timestamp, tar_timestamp) in tqdm(
+        for i, (device, seq, tar, seq_timestamp, tar_timestamp) in tqdm(
                 enumerate(test_loader), disable=not accelerator.is_local_main_process
         ):
             seq = seq.float().to(accelerator.device)
-            tar = tar.float().to(accelerator.device)
             seq_timestamp = seq_timestamp.float().to(accelerator.device)
-            tar_timestamp = tar_timestamp.float().to(accelerator.device)
 
             # decoder input
             dec_inp = torch.zeros_like(tar[:, -args.pred_len:, :]).float().to(accelerator.device)
@@ -124,60 +118,35 @@ def test(args, accelerator, model, test_data, test_loader, loss_func, mae_loss_f
             if args.use_amp:
                 with torch.cuda.amp.autocast():
                     if args.output_attention:
-                        outputs = model(seq, seq_timestamp, dec_inp, tar_timestamp)[0]
+                        outputs = model(device, seq, seq_timestamp, dec_inp, tar_timestamp)[0]
                     else:
-                        outputs = model(seq, seq_timestamp, dec_inp, tar_timestamp)
+                        outputs = model(device, seq, seq_timestamp, dec_inp, tar_timestamp)
             else:
                 if args.output_attention:
-                    outputs = model(seq, seq_timestamp, dec_inp, tar_timestamp)[0]
+                    outputs = model(device, seq, seq_timestamp, dec_inp, tar_timestamp)[0]
                 else:
-                    outputs = model(seq, seq_timestamp, dec_inp, tar_timestamp)
+                    outputs = model(device, seq, seq_timestamp, dec_inp, tar_timestamp)
 
             outputs = outputs[:, -args.pred_len:, :]
-            tar = tar[:, -args.pred_len:, :].to(accelerator.device)
 
             pred = outputs.detach().squeeze()
-            true = tar.detach().squeeze()
 
             test_result.append({
+                "device": device,
                 "pred": pred.cpu().numpy().tolist(),
-                "true": true.cpu().numpy().tolist()
             })
-
-            loss = loss_func(pred, true)
-            mae_loss = mae_loss_func(pred, true)
-            mse_loss = mse_loss_func(pred, true)
-
-            # if loss > 50 or mae_loss > 5:
-            #     print('Loss:', loss.item(), 'MAE:', mae_loss.item())
-            #     # save seq, pred, true as json
-            #     seq = seq.cpu().numpy().tolist()
-            #     pred = pred.cpu().numpy().tolist()
-            #     true = true.cpu().numpy().tolist()
-            #     with open(f'validation/model_1/{i}.json', 'w') as f:
-            #         json.dump({'seq': seq, 'pred': pred, 'true': true}, f)
-
-            total_loss.append(loss.item())
-            total_mae_loss.append(mae_loss.item())
-            total_mse_loss.append(mse_loss.item())
-
-    total_loss = np.average(total_loss)
-    total_mae_loss = np.average(total_mae_loss)
-    total_mse_loss = np.average(total_mse_loss)
-
-    with open('result/pred_result_2025-01-23.json', 'w') as f:
+    
+    with open('result/predict_result.json', 'w') as f:
         json.dump(test_result, f)
-    return total_loss, total_mae_loss, total_mse_loss
 
 
 def main():
     setting = 'Capacity_Timellm'
-    args.scale = True
 
-    train_data, train_loader = data_provider(args, 'Train.csv', 'train')
-    test_data, test_loader = data_provider(args, 'Val.csv', 'val')
+    train_data, train_loader = data_provider(args, 'total.csv', 'train')
+    test_data, test_loader = data_provider(args, 'total.csv', 'test')
 
-    args.content = load_prompt('./dataset/prompt_bank/Capacity.txt')
+    args.content = load_prompt('./dataset/Capacity.txt')
     model = TimeLLM.Model(args).float()
     model_path = f'checkpoints/Capacity_Timellm/checkpoint'
     model.load_state_dict(torch.load(model_path, map_location='cpu'))
@@ -204,19 +173,14 @@ def main():
                                             epochs=args.train_epochs,
                                             max_lr=args.learning_rate)
 
-    mae_loss = nn.L1Loss()
-    mse_loss = nn.MSELoss()
-
     train_loader, test_loader, model, model_optim, scheduler = accelerator.prepare(
         train_loader, test_loader, model, model_optim, scheduler
     )
 
-    test_loss, test_mae_loss, test_mse_loss = test(
-        args, accelerator, model, test_data, test_loader, smape_loss, mae_loss, mse_loss
-    )
+    test(args, accelerator, model, test_data, test_loader)
 
     if accelerator.is_main_process:
-        print(f'Testing Loss: {test_loss}, MAE Loss: {test_mae_loss}, MSE Loss: {test_mse_loss}')
+        print(f'Predicting Completed.')
 
     accelerator.wait_for_everyone()
 

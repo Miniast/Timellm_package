@@ -1,10 +1,8 @@
 import os
 import pandas as pd
 from torch.utils.data import Dataset
-from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
-import json
-import bisect
+import numpy as np
 
 
 class DatasetCapacity(Dataset):
@@ -59,10 +57,18 @@ class DatasetCapacity(Dataset):
         res_end = res_begin + self.label_len + self.pred_len
 
         seq = self.data[seq_begin:seq_end].values
-        res = self.data[res_begin:res_end].values
         seq_stamp = self.data_stamp[seq_begin:seq_end]
-        res_stamp = self.data_stamp[res_begin:res_end]
-
+        if self.flag != 'test':
+            res = self.data[res_begin:res_end].values
+            res_stamp = self.data_stamp[res_begin:res_end]
+        else:
+            # 测试时，res和res_stamp前label_len个数据从data中取出，后面填充长度为pred_len的0
+            res_end = res_begin + self.label_len
+            res = self.data[res_begin:res_end].values
+            res_stamp = self.data_stamp[res_begin:res_end]
+            res = np.concatenate([res, np.zeros((self.pred_len, self.data.shape[-1]))], axis=0)
+            res_stamp = np.concatenate([res_stamp, np.zeros((self.pred_len, self.data_stamp.shape[-1]))], axis=0)
+        
         return device, seq, res, seq_stamp, res_stamp
 
     def __len__(self):

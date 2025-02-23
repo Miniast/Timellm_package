@@ -12,7 +12,6 @@ import time
 import random
 import numpy as np
 import os
-import json
 
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
@@ -21,7 +20,7 @@ from utils.tools import EarlyStopping, adjust_learning_rate
 
 parser = argparse.ArgumentParser(description='Time-LLM')
 
-fix_seed = 2021
+fix_seed = 2025
 random.seed(fix_seed)
 torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
@@ -30,7 +29,7 @@ np.random.seed(fix_seed)
 parser.add_argument('--task_name', type=str, default='long_term_forecast',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
 parser.add_argument('--root_path', type=str, default='./dataset', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='Train.csv', help='data file')
+parser.add_argument('--data_path', type=str, default='total.csv', help='data file')
 parser.add_argument('--features', type=str, default='M',
                     help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, '
@@ -309,10 +308,6 @@ def main():
             accelerator.print('Updating learning rate to {}'.format(scheduler.get_last_lr()[0]))
 
     accelerator.wait_for_everyone()
-    # if accelerator.is_local_main_process:
-    #     path = './checkpoints'  # unique checkpoint saving path
-    #     del_files(path)  # delete checkpoint files
-    #     accelerator.print('success delete checkpoints')
 
 
 if __name__ == '__main__':

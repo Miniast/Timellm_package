@@ -5,16 +5,16 @@ llama_layers=32
 
 master_port=12345
 num_process=2
-batch_size=3
+batch_size=1
 d_model=32
 d_ff=128
 
-accelerate launch --multi_gpu --mixed_precision bf16 --num_processes $num_process --main_process_port $master_port run_capacity_predict.py \
+accelerate launch --multi_gpu --mixed_precision bf16 --num_processes $num_process --main_process_port $master_port predict.py \
   --seq_len 96 \
   --label_len 48 \
   --pred_len 96 \
   --factor 3 \
-  --enc_in 7 \
+  --enc_in 2 \
   --dec_in 7 \
   --c_out 7 \
   --des 'Exp' \

@@ -9,7 +9,6 @@ pd.set_option('display.max_colwidth', 30)
 # 指定 Excel 文件的路径
 parser = argparse.ArgumentParser(description='Time-LLM data prepare')
 parser.add_argument('--excel_file', type=str, default='./dataset/data.xlsx', help='excel file path')
-parser.add_argument('--mode', type=str, default='train', help='train or test')
 args = parser.parse_args()
 
 
@@ -84,39 +83,34 @@ def read_excel(excel_file):
     return dfs
 
 
-def create_dataset(dfs, mode):
+def create_dataset(dfs):
     train_data = []
     val_data = []
     test_data = []
     pos_base = 0
     for df in dfs:
         device = f'{df["device"].values[0]}-{df["name"].values[0]}'
-        if mode == 'train':
-            # 在train mode下，每隔48行做pos记录，直到pos+96+96越界, 形成一个seq_begins数组[0, 24, 48, ...]
-            seqs = [(device, pos + pos_base) for pos in range(0, len(df), 48) if pos + 192 <= len(df)]
-            # 将seqs分成train_data和val_data
-            train_data.extend(seqs[:int(len(seqs) * 0.8)])
-            val_data.extend(seqs[int(len(seqs) * 0.8):])
-        elif mode == 'test':
-            # 在test mode下，每个df只取一个最后seq
-            df = df.iloc[-192:]
-            test_data.append((device, pos_base))
+        # 在train mode下，每隔48行做pos记录，直到pos+96+96越界, 形成一个seq_begins数组[0, 24, 48, ...]
+        seqs = [(device, pos + pos_base) for pos in range(0, len(df), 48) if pos + 192 <= len(df)]
+        train_data.extend(seqs[:int(len(seqs) * 0.8)])
+        val_data.extend(seqs[int(len(seqs) * 0.8):])
+    
+        # 在test mode下，每个df只取一个最后seq, 不需要96的pred部分
+        test_data.append((device, pos_base + len(df) - 96))
         pos_base += len(df)
+    train_data_df = pd.DataFrame(train_data)
+    train_data_df.to_csv('./dataset/train_data_index.csv', index=False, header=False)
+    val_data_df = pd.DataFrame(val_data)
+    val_data_df.to_csv('./dataset/val_data_index.csv', index=False, header=False)
 
-    if mode == 'train':
-        train_data_df = pd.DataFrame(train_data)
-        train_data_df.to_csv('./dataset/train_data_index.csv', index=False, header=False)
-        val_data_df = pd.DataFrame(val_data)
-        val_data_df.to_csv('./dataset/val_data_index.csv', index=False, header=False)
-    elif mode == 'test':
-        test_data_df = pd.DataFrame(test_data)
-        test_data_df.to_csv('./dataset/test_data_index.csv', index=False, header=False)
+    test_data_df = pd.DataFrame(test_data)
+    test_data_df.to_csv('./dataset/test_data_index.csv', index=False, header=False)
 
 def main():
-    # dfs = read_excel(args.excel_file)
-    dfs = pd.read_csv('./dataset/total.csv')
-    dfs = [group.copy() for _, group in dfs.groupby('device')]
-    create_dataset(dfs, args.mode)
+    dfs = read_excel(args.excel_file)
+    # dfs = pd.read_csv('./dataset/total.csv')
+    # dfs = [group.copy() for _, group in dfs.groupby('device')]
+    create_dataset(dfs)
 
 
 if __name__ == '__main__':
