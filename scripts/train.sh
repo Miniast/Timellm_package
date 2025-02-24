@@ -9,7 +9,7 @@ batch_size=2
 d_model=32
 d_ff=128
 
-accelerate launch --multi_gpu --mixed_precision bf16 --num_processes $num_process --main_process_port $master_port predict.py \
+accelerate launch --multi_gpu --mixed_precision bf16 --num_processes $num_process --main_process_port $master_port train.py \
   --seq_len 96 \
   --label_len 48 \
   --pred_len 96 \
