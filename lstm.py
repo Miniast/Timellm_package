@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+import os
+from loguru import logger
 
 
 def create_sequences(data, seq_length, pred_length):
@@ -16,22 +18,22 @@ def create_sequences(data, seq_length, pred_length):
     return sequences
 
 
-def get_data_loader(file_path, batch_size, data_type, seq_length, pred_length):
-    df = pd.read_csv(file_path)
-    # train_index_df = pd.read_csv('./dataset/train_data_index.csv')
-    # val_index_df = pd.read_csv('./dataset/val_data_index.csv')
-    # data_raw = df.values
-    # seq_data = create_sequences(data_raw, seq_length, pred_length)
-    # X = torch.tensor(np.array([s[0] for s in seq_data]), dtype=torch.float32)
-    # Y = torch.tensor(np.array([s[1] for s in seq_data]), dtype=torch.float32)
-    # dataset = TensorDataset(X, Y)
-    # shuffle_flag = data_type == 'train'
-    # loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_flag)
-    # return loader
-    device_num = df['device'].nunique()
-    for device in range(device_num):
-        # only remain the 'cpu' and 'memory' col
-        data_raw =
+def get_data_loader(device_id, df, batch_size, data_type, seq_length, pred_length):
+    # only remain the 'cpu' and 'memory' col
+    data_raw = df.loc[df['device'] == device_id, ['cpu', 'memory']].values
+    seq_data = create_sequences(data_raw, seq_length, pred_length)
+    X = torch.tensor(np.array([s[0] for s in seq_data]), dtype=torch.float32)
+    Y = torch.tensor(np.array([s[1] for s in seq_data]), dtype=torch.float32)
+    shuffle_flag = data_type == 'train'
+    # 0.8 for train, 0.2 for test
+    split = int(len(X) * 0.8)
+    train_set = TensorDataset(X[:split], Y[:split])
+    val_set = TensorDataset(X[split:], Y[split:])
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle_flag)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+
+    return train_loader, val_loader
+
 
 class MultiStepLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers):
@@ -61,9 +63,10 @@ def smape_loss(y_true, y_pred):
 def train(model, train_loader, test_loader, epochs, device, pred_length, criterion, optimizer, save_path):
     model.to(device)
     best_test_loss = float('inf')
-    patience = 10
+    patience = 4
     trigger_times = 0
 
+    logger.info(f'Sample Number: {len(train_loader.dataset)}')
     for epoch in range(1, epochs + 1):
         model.train()
         train_loss = 0.0
@@ -87,18 +90,18 @@ def train(model, train_loader, test_loader, epochs, device, pred_length, criteri
                 test_loss += loss.item() * x_batch.size(0)
         test_loss /= len(test_loader.dataset)
 
-        print(f"Epoch {epoch}/{epochs} | Train Loss: {train_loss:.6f} | Test Loss: {test_loss:.6f}")
+        logger.info(f"Epoch {epoch}/{epochs} | Train Loss: {train_loss:.6f} | Test Loss: {test_loss:.6f}")
 
         if test_loss < best_test_loss:
             best_test_loss = test_loss
             torch.save(model.state_dict(), save_path)
-            print(f"模型已保存至 {save_path}")
+            logger.info(f"模型已保存至 {save_path}")
             trigger_times = 0
         else:
             trigger_times += 1
-            print(f"触发早停计数: {trigger_times}/{patience}")
+            logger.info(f"Early stop计数: {trigger_times}/{patience}")
             if trigger_times >= patience:
-                print("早停触发，停止训练。")
+                logger.info("Early stop，停止训练。")
                 break
 
 
@@ -118,7 +121,7 @@ def test(model, test_loader, device, criterion, pred_length):
     test_mse_loss /= len(test_loader.dataset)
     test_mae_loss /= len(test_loader.dataset)
     test_smape_loss /= len(test_loader.dataset)
-    print(f"Test MSE Loss: {test_mse_loss:.6f}, MAE Loss: {test_mae_loss:.6f}, SMAPE Loss: {test_smape_loss:.6f}")
+    logger.info(f"Test MSE Loss: {test_mse_loss:.6f}, MAE Loss: {test_mae_loss:.6f}, SMAPE Loss: {test_smape_loss:.6f}")
 
 
 def main():
@@ -128,28 +131,38 @@ def main():
     epochs = 100
     hidden_size = 512
     learning_rate = 0.001
-    save_path = './best_model.pth'
+    device_num = 134
+    file_path = './dataset/total.csv'
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
+    logger.info(f"Use: {device}")
 
-    # train_loader = get_data_loader('./dataset/train.csv', batch_size, 'train', seq_length, pred_length)
-    # test_loader = get_data_loader('./dataset/test.csv', batch_size, 'test', seq_length, pred_length)
-    # train_loader, val_loader =
+    df = pd.read_csv(file_path)
 
-    model = MultiStepLSTM(input_size=4, hidden_size=hidden_size, output_size=4, num_layers=3)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    for device_id in range(device_num):
+        start_point = 59
+        if device_id < start_point:
+            continue
+        logger.info(f'Training device {device_id}')
+        save_path = f'./model_results/{device_id}_model.pth'
+        train_loader, val_loader = get_data_loader(device_id, df, batch_size, 'train', seq_length, pred_length)
+        # test_loader = get_data_loader(file_path, batch_size, 'test', seq_length, pred_length)
 
-    train(model, train_loader, test_loader, epochs, device, pred_length, criterion, optimizer, save_path)
+        # Initialize model
+        model = MultiStepLSTM(input_size=2, hidden_size=hidden_size, output_size=2, num_layers=3)
+        criterion = nn.MSELoss()
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # if os.path.exists(save_path):
-    #     state_dict = torch.load(save_path, map_location=device, weights_only=True)
-    #     model.load_state_dict(state_dict)
-    #     print("已加载最佳模型进行测试。")
-    #
-    # test(model, test_loader, device, criterion, pred_length)
+        if os.path.exists(save_path):
+            state_dict = torch.load(save_path, map_location=device)
+            model.load_state_dict(state_dict)
+            logger.info(f"Model loaded successfully of {save_path}.")
+
+        train(model, train_loader, val_loader, epochs, device, pred_length, criterion, optimizer, save_path)
+
+        # test(model, val_loader, device, criterion, pred_length)
 
 
 if __name__ == "__main__":
     main()
+    # logger.info('?')

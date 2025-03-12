@@ -3,3 +3,4 @@
 duplicated
 checkpoints/Capacity_Timellm/checkpoint
 *.log
+model_results/*

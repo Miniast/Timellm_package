@@ -1,8 +1,11 @@
 import pandas as pd
+import json
 
-pd.set_option('display.max_columns', None)
-pd.set_option('display.max_rows', 50)
-pd.set_option('display.width', 1000)
-pd.set_option('display.max_colwidth', 30)
+with open('./result/validate_result.json', 'r') as f:
+    data = json.load(f)
 
-df = pd.read_csv('./dataset/total.csv')
+for record in data:
+    pred = record['pred']
+    true = record['true']
+    # Batch size = 2
+
