@@ -26,7 +26,7 @@ def get_data_loader(device_id, df, batch_size, data_type, seq_length, pred_lengt
     Y = torch.tensor(np.array([s[1] for s in seq_data]), dtype=torch.float32)
     shuffle_flag = data_type == 'train'
     # 0.8 for train, 0.2 for test
-    split = int(len(X) * 0.8)
+    split = int(len(X) * 0.7)
     train_set = TensorDataset(X[:split], Y[:split])
     val_set = TensorDataset(X[split:], Y[split:])
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle_flag)
@@ -63,7 +63,7 @@ def smape_loss(y_true, y_pred):
 def train(model, train_loader, test_loader, epochs, device, pred_length, criterion, optimizer, save_path):
     model.to(device)
     best_test_loss = float('inf')
-    patience = 4
+    patience = 6
     trigger_times = 0
 
     logger.info(f'Sample Number: {len(train_loader.dataset)}')
@@ -134,13 +134,13 @@ def main():
     device_num = 134
     file_path = './dataset/total.csv'
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     logger.info(f"Use: {device}")
 
     df = pd.read_csv(file_path)
 
     for device_id in range(device_num):
-        start_point = 59
+        start_point = 105
         if device_id < start_point:
             continue
         logger.info(f'Training device {device_id}')
