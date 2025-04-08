@@ -1,6 +1,7 @@
 .idea
 **/__pycache__/
 duplicated
-checkpoints/Capacity_Timellm/checkpoint
+checkpoints/*
 *.log
 model_results/*
+/result/*

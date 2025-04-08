@@ -90,7 +90,7 @@ def create_dataset(dfs):
     pos_base = 0
     for df in dfs:
         device = f'{df["device"].values[0]}-{df["name"].values[0]}'
-        # 在train mode下，每隔48行做pos记录，直到pos+96+96越界, 形成一个seq_begins数组[0, 24, 48, ...]
+        # 在train mode下，每隔48行做pos记录，直到pos+96+96越界, 形成一个seq_begins数组[0, 48, 96, ...]
         seqs = [(device, pos + pos_base) for pos in range(0, len(df), 48) if pos + 192 <= len(df)]
         train_data.extend(seqs[:int(len(seqs) * 0.8)])
         val_data.extend(seqs[int(len(seqs) * 0.8):])
@@ -107,9 +107,9 @@ def create_dataset(dfs):
     test_data_df.to_csv('./dataset/test_data_index.csv', index=False, header=False)
 
 def main():
-    dfs = read_excel(args.excel_file)
-    # dfs = pd.read_csv('./dataset/total.csv')
-    # dfs = [group.copy() for _, group in dfs.groupby('device')]
+    # dfs = read_excel(args.excel_file)
+    dfs = pd.read_csv('./dataset/total.csv')
+    dfs = [group.copy() for _, group in dfs.groupby('device')]
     create_dataset(dfs)
 
 

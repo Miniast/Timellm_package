@@ -87,8 +87,7 @@ parser.add_argument('--llm_layers', type=int, default=32)
 args = parser.parse_args()
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 deepspeed_plugin = DeepSpeedPlugin(hf_ds_config='./ds_config_zero2.json')
-accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], deepspeed_plugin=deepspeed_plugin,
-                          gradient_accumulation_steps=8)
+accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], deepspeed_plugin=deepspeed_plugin)
 
 
 def smape_loss(pred, true):
@@ -171,6 +170,8 @@ def main():
 
     args.content = load_prompt('./dataset/Capacity.txt')
     model = TimeLLM.Model(args).float()
+    # model_path = f'checkpoints/{setting}/checkpoint'
+    # model.load_state_dict(torch.load(model_path, map_location='cpu'))
     path = os.path.join(args.checkpoints, setting)  # unique checkpoint saving path
 
     if not os.path.exists(path) and accelerator.is_local_main_process:
@@ -308,6 +309,9 @@ def main():
             accelerator.print('Updating learning rate to {}'.format(scheduler.get_last_lr()[0]))
 
     accelerator.wait_for_everyone()
+    
+    if torch.distributed.is_initialized():
+        torch.distributed.destroy_process_group()
 
 
 if __name__ == '__main__':

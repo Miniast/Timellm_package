@@ -220,6 +220,7 @@ class Model(nn.Module):
             # device 由 {device_id}-{name} 组成, 但是name 可能包含 - 字符
             device_id = now_device.split('-', maxsplit=1)[0]
             name = now_device.split('-', maxsplit=1)[1]
+            now_feature = 'cpu' if b % 2 == 0 else 'memory'
             min_values_str = str(min_values[b].tolist()[0])
             max_values_str = str(max_values[b].tolist()[0])
             median_values_str = str(medians[b].tolist()[0])
@@ -229,6 +230,7 @@ class Model(nn.Module):
                 f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
                 f"Device: {device_id}, "
                 f"Name: {name}, "
+                f"Now Feature: {now_feature}, "
                 "Input statistics: "
                 f"min value {min_values_str}, "
                 f"max value {max_values_str}, "
@@ -262,10 +264,10 @@ class Model(nn.Module):
         dec_out = dec_out.view(B, N, E * P)
         dec_out_trans = dec_out.transpose(1, 2)
         dec_out_mix = self.channel_mix_layer(dec_out_trans)
-        dec_out = F.relu(dec_out)
+        dec_out_mix = F.relu(dec_out_mix)
         dec_out_mix = dec_out_mix.transpose(1, 2)
         dec_out = dec_out + dec_out_mix
-        
+
         dec_out = dec_out.view(B, N, E, P)
         dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
         dec_out = dec_out.permute(0, 2, 1).contiguous()

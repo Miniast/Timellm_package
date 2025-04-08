@@ -1,11 +1,12 @@
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import shutil
 
 from tqdm import tqdm
 
-plt.switch_backend('agg')
+
+# plt.switch_backend('agg')
 
 
 def adjust_learning_rate(accelerator, optimizer, scheduler, epoch, args, printout=True):
@@ -43,7 +44,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        self.val_loss_min = np.inf
         self.delta = delta
         self.save_mode = save_mode
 
@@ -101,6 +102,7 @@ class StandardScaler():
 
     def inverse_transform(self, data):
         return (data * self.std) + self.mean
+
 
 def adjustment(gt, pred):
     anomaly_state = False
