@@ -1,3 +1,47 @@
+import sys
+
+
+class StdoutFilter:
+    def __init__(self, original_stream):
+        self.original_stream = original_stream
+        self.buffer = ""
+
+    def write(self, data):
+        # 累积数据到缓冲区
+        self.buffer += data
+
+        # 处理完整行
+        if "\n" in self.buffer:
+            lines = self.buffer.split("\n")
+            # 保留最后一个不完整的行（如果有）
+            self.buffer = lines.pop() if not data.endswith("\n") else ""
+
+            # 只输出包含 MY_STATUS: 的行
+            for line in lines:
+                if "MY_STATUS:" in line:
+                    self.original_stream.write(line + "\n")
+
+    def flush(self):
+        self.original_stream.flush()
+
+    # 添加这些特殊方法来完全模拟文件对象
+    def fileno(self):
+        return self.original_stream.fileno()
+
+    def isatty(self):
+        return self.original_stream.isatty()
+
+    def readable(self):
+        return self.original_stream.readable()
+
+    def writable(self):
+        return self.original_stream.writable()
+
+
+# sys.stdout = StdoutFilter(sys.stdout)
+# sys.stderr = StdoutFilter(sys.stderr)
+
+
 import argparse
 import torch
 from accelerate import Accelerator, DeepSpeedPlugin
@@ -12,37 +56,6 @@ import random
 import numpy as np
 import os
 import json
-
-import sys
-
-
-class StdoutFilter:
-    def __init__(self, original_stream):
-        self.original_stream = original_stream
-        self.buffer = ""
-
-    def write(self, data):
-        # 累积数据，因为写入可能不是按行完整写入
-        self.buffer += data
-        # 当缓冲区中出现换行符时，按行分割
-        if "\n" in self.buffer:
-            lines = self.buffer.splitlines(keepends=True)
-            # 如果最后一行不完整，则保留在 buffer 中
-            if not lines[-1].endswith("\n"):
-                self.buffer = lines.pop()
-            else:
-                self.buffer = ""
-            for line in lines:
-                # 仅将包含特定标识的行输出到原始 stdout
-                if "MY_STATUS:" in line:
-                    self.original_stream.write(line)
-
-    def flush(self):
-        self.original_stream.flush()
-
-
-sys.stdout = StdoutFilter(sys.stdout)
-sys.stderr = StdoutFilter(sys.stderr)
 
 
 os.environ["CURL_CA_BUNDLE"] = ""
@@ -203,9 +216,14 @@ def val(
 
     model.eval()
     with torch.no_grad():
-        for i, (device, seq, tar, seq_timestamp, tar_timestamp) in tqdm(
-            enumerate(val_loader), disable=not accelerator.is_local_main_process
-        ):
+        for i, (
+            device,
+            seq,
+            tar,
+            seq_timestamp,
+            tar_timestamp,
+            start_timestamp,
+        ) in tqdm(enumerate(val_loader), disable=not accelerator.is_local_main_process):
             seq = seq.float().to(accelerator.device)
             tar = tar.float().to(accelerator.device)
             seq_timestamp = seq_timestamp.float().to(accelerator.device)
@@ -264,10 +282,10 @@ def val(
             total_mse_loss.append(mse_loss.item())
 
             # pred/true shape: [B, T, 2]
-            cpu_pred = pred[:, :, 0]
-            cpu_true = true[:, :, 0]
-            mem_pred = pred[:, :, 1]
-            mem_true = true[:, :, 1]
+            cpu_pred = pred[:, 0]
+            cpu_true = true[:, 0]
+            mem_pred = pred[:, 1]
+            mem_true = true[:, 1]
 
             cpu_smape = smape_loss(cpu_pred, cpu_true)
             mem_smape = smape_loss(mem_pred, mem_true)
@@ -276,11 +294,14 @@ def val(
 
             state = json.dumps(
                 {
-                    "epoch": 0,
-                    "step": i,
-                    "total_step": len(val_loader),
-                    "cpu_smape": torch.mean(cpu_smape).item(),
-                    "mem_smape": torch.mean(mem_smape).item(),
+                    "sample": {"now": i + 1},
+                    "loss": {
+                        "now_cpu_smape": cpu_smape.item(),
+                        "now_mem_smape": mem_smape.item(),
+                        "total_cpu_smape": np.mean(total_cpu_smape),
+                        "total_mem_smape": np.mean(total_mem_smape),
+                    },
+                    "timestamp": start_timestamp.cpu().item(),
                 }
             )
             print(f"MY_STATUS:{state}")
@@ -291,19 +312,32 @@ def val(
 
     if not os.path.exists("result"):
         os.makedirs("result")
-    with open("result/capacity_val_result.json", "w") as f:
+    with open("result/result.json", "w") as f:
         json.dump(val_result, f)
     return total_loss, total_mae_loss, total_mse_loss
 
 
 def main():
     setting = "Capacity_Timellm"
-    # setting = 'Origin_Timellm'
 
     train_data, train_loader = data_provider(args, "total.csv", "train")
     val_data, val_loader = data_provider(args, "total.csv", "val")
 
     args.content = load_prompt("./dataset/Capacity.txt")
+
+    print(
+        "MY_STATUS:",
+        json.dumps(
+            {
+                "sample": {
+                    "now": 0,
+                    "total": len(val_loader),
+                }
+            }
+        ),
+    )
+    print("MY_STATUS:", "模型加载中...")
+
     model = TimeLLM.Model(args).float()
     model_path = f"checkpoints/{setting}/checkpoint"
     model.load_state_dict(torch.load(model_path, map_location="cpu"))
@@ -341,14 +375,17 @@ def main():
         train_loader, val_loader, model, model_optim, scheduler
     )
 
+    print("MY_STATUS:", "模型加载完成")
+
     val_loss, val_mae_loss, val_mse_loss = val(
         args, accelerator, model, val_data, val_loader, smape_loss, mae_loss, mse_loss
     )
 
     if accelerator.is_main_process:
         print(
-            f"valing Loss: {val_loss}, MAE Loss: {val_mae_loss}, MSE Loss: {val_mse_loss}"
+            f"Validate Loss: {val_loss}, MAE Loss: {val_mae_loss}, MSE Loss: {val_mse_loss}"
         )
+        print("MY_STATUS:", "验证完成")
 
     accelerator.wait_for_everyone()
 

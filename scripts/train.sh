@@ -8,7 +8,7 @@ batch_size=2
 d_model=32
 d_ff=128
 
-conda activate tlm
+# conda activate tlm
 
 accelerate launch --use_deepspeed --mixed_precision bf16 --num_processes $num_process --main_process_port $master_port train.py \
   --seq_len 96 \
