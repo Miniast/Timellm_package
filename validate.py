@@ -270,6 +270,7 @@ def val(
                     "device": device,
                     "pred": pred.cpu().numpy().tolist(),
                     "true": true.cpu().numpy().tolist(),
+                    "timestamp": start_timestamp.cpu().item(),
                 }
             )
 

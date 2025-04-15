@@ -203,35 +203,33 @@ def test(args, accelerator, model, test_data, test_loader):
 
     model.eval()
     with torch.no_grad():
-        for i, (device, seq, tar, seq_timestamp, tar_timestamp, start_timestamp) in tqdm(
+        for i, (
+            device,
+            seq,
+            tar,
+            seq_timestamp,
+            tar_timestamp,
+            start_timestamp,
+        ) in tqdm(
             enumerate(test_loader), disable=not accelerator.is_local_main_process
         ):
             seq = seq.float().to(accelerator.device)
             seq_timestamp = seq_timestamp.float().to(accelerator.device)
 
             # decoder input
-            dec_inp = (
-                torch.zeros_like(tar[:, -args.pred_len :, :])
-                .float()
-                .to(accelerator.device)
-            )
-            dec_inp = (
-                torch.cat([tar[:, : args.label_len, :], dec_inp], dim=1)
-                .float()
-                .to(accelerator.device)
-            )
 
-            if args.use_amp:
-                with torch.cuda.amp.autocast():
-                    if args.output_attention:
-                        outputs = model(
-                            device, seq, seq_timestamp, dec_inp, tar_timestamp
-                        )[0]
-                    else:
-                        outputs = model(
-                            device, seq, seq_timestamp, dec_inp, tar_timestamp
-                        )
-            else:
+            for day_idx in range(30):
+                dec_inp = torch.cat(
+                    [
+                        seq[:, -args.label_len :, :],
+                        torch.zeros(
+                            (seq.shape[0], args.pred_len, seq.shape[-1]),
+                            device=accelerator.device,
+                        ),
+                    ],
+                    dim=1,
+                ).to(accelerator.device)
+
                 if args.output_attention:
                     outputs = model(device, seq, seq_timestamp, dec_inp, tar_timestamp)[
                         0
@@ -239,23 +237,25 @@ def test(args, accelerator, model, test_data, test_loader):
                 else:
                     outputs = model(device, seq, seq_timestamp, dec_inp, tar_timestamp)
 
-            outputs = outputs[:, -args.pred_len :, :]
+                outputs = outputs[:, -args.pred_len :, :]
 
-            pred = outputs.detach().squeeze()
-            # pred: shape(batch_size, pred_len, 2)
-            # cpu_pred = pred[:, :, 0]
-            # mem_pred = pred[:, :, 1]
+                pred = outputs.detach().squeeze()
+                # pred: shape(batch_size, pred_len, 2)˝
+                # cpu_pred = pred[:, :, 0]
+                # mem_pred = pred[:, :, 1]
 
-            # print("MY_STATUS:", start_timestamp)
-            test_result.append(
-                {
-                    "device": device,
-                    "pred": pred.cpu().numpy().tolist(),
-                    "timestamp": start_timestamp.cpu().item(),
-                }
-            )
-
-            print("MY_STATUS:", json.dumps({"sample": {"now": i + 1}}))
+                # print("MY_STATUS:", start_timestamp)
+                test_result.append(
+                    {
+                        "device": device,
+                        "order": day_idx,
+                        "pred": pred.cpu().numpy().tolist(),
+                        "timestamp": start_timestamp.cpu().item(),
+                    }
+                )
+                print("MY_STATUS:", json.dumps({"sample": {"now": i * 30 + day_idx + 1}}))
+                seq = outputs
+                start_timestamp = start_timestamp + args.pred_len * 900000
 
     with open("result/predict_result.json", "w") as f:
         json.dump(test_result, f)
@@ -278,13 +278,13 @@ def main():
             {
                 "sample": {
                     "now": 0,
-                    "total": len(test_loader),
+                    "total": len(test_loader) * 30,
                 }
             }
         ),
     )
     print("MY_STATUS:", "模型加载中...")
-    
+
     model = TimeLLM.Model(args).float()
     model_path = f"checkpoints/Capacity_Timellm/checkpoint"
     model.load_state_dict(torch.load(model_path, map_location="cpu"))
