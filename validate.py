@@ -319,10 +319,11 @@ def val(
 
 
 def main():
-    setting = "Capacity_Timellm"
+    setting = "Capacity_Timellm_shifted_0.1"
+    data_path = "total_cpu_mean_0.1.csv"
 
-    train_data, train_loader = data_provider(args, "total.csv", "train")
-    val_data, val_loader = data_provider(args, "total.csv", "val")
+    train_data, train_loader = data_provider(args, data_path, "train")
+    val_data, val_loader = data_provider(args, data_path, "val")
 
     args.content = load_prompt("./dataset/Capacity.txt")
 

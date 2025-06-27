@@ -15,7 +15,10 @@ transformers.logging.set_verbosity_error()
 # MODEL_PATH = '/home/data/pretrained_llms/llama2-7b-hf'
 
 # gnode6
-MODEL_PATH = '/home/aiseon/storage/public_data/Models/Llama-2-7b-hf'
+# MODEL_PATH = '/home/aiseon/storage/public_data/Models/Llama-2-7b-hf'
+
+# muxi
+MODEL_PATH = '/home/test/models/Llama-2-7b-hf'
 
 
 class FlattenHead(nn.Module):

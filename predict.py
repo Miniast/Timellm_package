@@ -265,10 +265,11 @@ def test(args, accelerator, model, test_data, test_loader):
 
 
 def main():
-    setting = "Capacity_Timellm"
+    setting = "Capacity_Timellm_shifted_0.1"
+    data_path = "total_cpu_mean_0.1.csv"
 
-    train_data, train_loader = data_provider(args, "total.csv", "train")
-    test_data, test_loader = data_provider(args, "total.csv", "test")
+    train_data, train_loader = data_provider(args, data_path, "train")
+    test_data, test_loader = data_provider(args, data_path, "test")
 
     args.content = load_prompt("./dataset/Capacity.txt")
 
@@ -286,12 +287,12 @@ def main():
     print("MY_STATUS:", "模型加载中...")
 
     model = TimeLLM.Model(args).float()
-    model_path = f"checkpoints/Capacity_Timellm/checkpoint"
+    model_path = f"checkpoints/{setting}/checkpoint"
     model.load_state_dict(torch.load(model_path, map_location="cpu"))
-    path = os.path.join(args.checkpoints, setting)  # unique checkpoint saving path
+    # path = os.path.join(args.checkpoints, setting)  # unique checkpoint saving path
 
-    if not os.path.exists(path) and accelerator.is_local_main_process:
-        os.makedirs(path)
+    # if not os.path.exists(path) and accelerator.is_local_main_process:
+    #     os.makedirs(path)
 
     train_steps = len(train_loader)
 

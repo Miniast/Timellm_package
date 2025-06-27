@@ -5,3 +5,4 @@ checkpoints/*
 *.log
 model_results/*
 /result/*
+packages

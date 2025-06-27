@@ -3,14 +3,15 @@ learning_rate=0.001
 llama_layers=32
 
 master_port=12345
-num_process=1
-batch_size=2
+num_process=8
+batch_size=4
 d_model=32
 d_ff=128
 
 # conda activate tlm
 
 accelerate launch --use_deepspeed --mixed_precision bf16 --num_processes $num_process --main_process_port $master_port train.py \
+  --data_path ./dataset/total_cpu_mean_0.1.csv \
   --seq_len 96 \
   --label_len 48 \
   --pred_len 96 \
@@ -22,5 +23,4 @@ accelerate launch --use_deepspeed --mixed_precision bf16 --num_processes $num_pr
   --d_ff $d_ff \
   --batch_size $batch_size \
   --learning_rate $learning_rate \
-  --llm_layers $llama_layers \
-  --train_epochs $train_epochs
+  --llm_layers $llama_layers

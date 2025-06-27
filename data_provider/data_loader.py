@@ -78,7 +78,6 @@ class DatasetCapacity(Dataset):
                 axis=0,
             )
 
-
         start_timestamp = int(self.start_timestamp[seq_end - 1]) + 900000
 
         return (
